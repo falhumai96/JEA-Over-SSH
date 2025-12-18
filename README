@@ -2,21 +2,21 @@
 
 ## 1️⃣ Create the JEA User
 
-* Create a dedicated Windows user (e.g., `Admin-JEA`) with a secure password.
-* Give the user administrative privileges.
-* This user will **only be used as the SSH entry point** to run allowed commands through JEA.
+- Create a dedicated Windows user (e.g., `Admin-JEA`) with a secure password.
+- Give the user administrative privileges.
+- This user will **only be used as the SSH entry point** to run allowed commands through JEA.
 
 ---
 
 ## 2️⃣ Prepare the JEA Folder Structure
 
-* Create folder:
+- Create folder:
 
 ```
 C:\ProgramData\Admin-JEA
 ```
 
-* Inside it, create:
+- Inside it, create:
 
 ```
 Scripts\
@@ -24,31 +24,31 @@ Scripts.json
 id_ed25519  # private key for SSH login
 ```
 
-* **Important:** Ensure the entire ProgramData folder and all children are **read-only for normal users**. Only `Administrators` and `SYSTEM` should have write permissions.
+- **Important:** Ensure the entire ProgramData folder and all children are **read-only for normal users**. Only `Administrators` and `SYSTEM` should have write permissions.
 
 ---
 
 ## 3️⃣ Generate SSH Keys for Admin-JEA
 
-* Log in as `Admin-JEA` and run:
+- Log in as `Admin-JEA` and run:
 
 ```powershell
 ssh-keygen
 ```
 
-* Add the **public key** to:
+- Add the **public key** to:
 
 ```
 C:\Users\Admin-JEA\.ssh\authorized_keys
 ```
 
-* Copy the **private key** to:
+- Copy the **private key** to:
 
 ```
 C:\ProgramData\Admin-JEA\id_ed25519
 ```
 
-* Users who need SSH access to JEA should copy this private key locally.
+- Users who need SSH access to JEA should copy this private key locally.
 
 ---
 
@@ -95,9 +95,8 @@ Start-Service ssh-agent
 ```
 
 > Notes:
->
-> * ForceCommand ensures users cannot bypass the JEA runner.
-> * Only SSH key login is allowed; keyboard-interactive and password logins are disabled.
+> - ForceCommand ensures users cannot bypass the JEA runner.  
+> - Only SSH key login is allowed; keyboard-interactive and password logins are disabled.
 
 ---
 
@@ -234,16 +233,16 @@ ssh -i .\.ssh\admin-jea-id_ed25519 admin-jea@localhost $(ConvertTo-Json @{
 })
 ```
 
-* Only allowed commands run.
-* User password is validated inside the JEA runner.
-* Output is returned as JSON with `StdOut`, `StdErr`, `ExitCode`.
+- Only allowed commands run.
+- User password is validated inside the JEA runner.
+- Output is returned as JSON with `StdOut`, `StdErr`, `ExitCode`.
 
 ---
 
 ### ✅ Notes / Requirements
 
-* **PowerShell 7+** is required (for `ArgumentList` support).
-* Only **SSH key login** is allowed; keyboard-interactive and password logins are disabled.
-* ProgramData folder (`C:\ProgramData\Admin-JEA`) and its children must be **read-only for normal users**.
-* All login enforcement is handled inside the JEA runner; no additional console/RDP/network restrictions are required.
-* **OpenSSH SSH Server** and **OpenSSH Authentication Agent** must be set to **Automatic** and started **after** updating `sshd_config`.
+- **PowerShell 7+** is required (for `ArgumentList` support).  
+- Only **SSH key login** is allowed; keyboard-interactive and password logins are disabled.  
+- ProgramData folder (`C:\ProgramData\Admin-JEA`) and its children must be **read-only for normal users**.  
+- All login enforcement is handled inside the JEA runner; no additional console/RDP/network restrictions are required.  
+- **OpenSSH SSH Server** and **OpenSSH Authentication Agent** must be set to **Automatic** and started **after** updating `sshd_config`.
