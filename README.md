@@ -93,7 +93,7 @@ Match User Admin-JEA
     AllowTcpForwarding no
     PermitTunnel no
     X11Forwarding no
-    PermitTTY yes
+    PermitTTY no
 ```
 
 4. Ensure OpenSSH services are **started and automatic**:
