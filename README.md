@@ -4,12 +4,12 @@
 
 ## Table of Contents
 
-1. [Create the JEA User](#1-create-the-jea-user)
-2. [Prepare the JEA Folder](#2-prepare-the-jea-folder-structure)
-3. [Generate SSH Keys for Admin-JEA](#3-generate-ssh-keys-for-admin-jea)
-4. [Install and Configure OpenSSH](#4-install-and-configure-openssh)
-5. [Place JEA Runner and Scripts](#5-place-jea-runner-and-scripts)
-6. [Test the Setup](#6-test-the-setup)
+1. [Create the JEA User](#1%EF%B8%8F⃣-create-the-jea-user)
+2. [Prepare the JEA Folder](#2%EF%B8%8F⃣-prepare-the-jea-folder-structure)
+3. [Generate SSH Keys for Admin-JEA](#3%EF%B8%8F⃣-generate-ssh-keys-for-admin-jea)
+4. [Install and Configure OpenSSH](#4%EF%B8%8F⃣-install-and-configure-openssh)
+5. [Place JEA Runner and Scripts](#5%EF%B8%8F⃣-place-jea-runner-and-scripts)
+6. [Test the Setup](#6%EF%B8%8F⃣-test-the-setup)
 7. [Notes / Requirements](#notes--requirements)
 
 ---
