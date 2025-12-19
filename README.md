@@ -178,9 +178,54 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 try {
+    if (-not $CommandArgs -or $CommandArgs.Count -lt 3 -or $CommandArgs.Count -gt 4) {
+        return [pscustomobject]@{
+            StdOut   = ""
+            StdErr   = "Invalid arguments. Expected: [bind|unbind] [bus|hw] <value> [force]"
+            ExitCode = 1
+        }
+    }
+
+    $action     = $CommandArgs[0]
+    $targetType = $CommandArgs[1]
+    $value      = $CommandArgs[2]
+    $forceFlag  = if ($CommandArgs.Count -eq 4) { $CommandArgs[3] } else { $null }
+
+    if ($action -notin @('bind', 'unbind')) {
+        return [pscustomobject]@{
+            StdOut   = ""
+            StdErr   = "Invalid action. Only 'bind' or 'unbind' are allowed."
+            ExitCode = 1
+        }
+    }
+
+    if ($targetType -notin @('bus', 'hw')) {
+        return [pscustomobject]@{
+            StdOut   = ""
+            StdErr   = "Invalid target type. Only 'bus' or 'hw' are allowed."
+            ExitCode = 1
+        }
+    }
+
+    if ($forceFlag) {
+        if ($forceFlag -ne 'force') {
+            return [pscustomobject]@{
+                StdOut   = ""
+                StdErr   = "Invalid argument '$forceFlag'. Only 'force' is allowed as the optional 4th argument."
+                ExitCode = 1
+            }
+        }
+        if ($action -ne 'bind') {
+            return [pscustomobject]@{
+                StdOut   = ""
+                StdErr   = "'force' is only allowed with 'bind'."
+                ExitCode = 1
+            }
+        }
+    }
+
     $exe = Get-Command 'usbipd.exe' -ErrorAction Stop
     $exePath = $exe.Source
-    if (-not $CommandArgs) { $CommandArgs = @() }
 
     $psi = [System.Diagnostics.ProcessStartInfo]::new()
     $psi.FileName               = $exePath
@@ -189,7 +234,19 @@ try {
     $psi.RedirectStandardOutput = $true
     $psi.RedirectStandardError  = $true
 
-    foreach ($arg in $CommandArgs) { $psi.ArgumentList.Add([string]$arg) }
+    # ---- construct safe usbipd arguments ----
+    $psi.ArgumentList.Add($action)
+
+    switch ($targetType) {
+        'bus' { $psi.ArgumentList.Add('-b') }
+        'hw'  { $psi.ArgumentList.Add('-i') }
+    }
+
+    $psi.ArgumentList.Add($value)
+
+    if ($forceFlag) {
+        $psi.ArgumentList.Add('--force')
+    }
 
     $proc = [System.Diagnostics.Process]::new()
     $proc.StartInfo = $psi
