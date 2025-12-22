@@ -121,45 +121,102 @@ Start-Service ssh-agent
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-function Fail($Message, $Code = 1) {
+function Fail ($Message, $Code = 1) {
     Write-Error $Message
     exit $Code
 }
 
 $raw = [Environment]::GetEnvironmentVariable('SSH_ORIGINAL_COMMAND')
-if (-not $raw) { Fail "SSH_ORIGINAL_COMMAND is not set" }
+if (-not $raw) {
+    Fail "SSH_ORIGINAL_COMMAND is not set"
+}
 
-try { $request = $raw | ConvertFrom-Json -ErrorAction Stop } catch { Fail "SSH_ORIGINAL_COMMAND is not valid JSON" }
+try {
+    $request = $raw | ConvertFrom-Json -ErrorAction Stop
+} catch {
+    Fail "SSH_ORIGINAL_COMMAND is not valid JSON"
+}
 
-$command  = $null; try { $command  = [string]$request.Command } catch { Fail "Command not provided" }
-$userName = $null; try { $userName = [string]$request.User } catch { Fail "User not provided" }
-$passwordPlain = $null; try { $passwordPlain = [string]$request.Password } catch { Fail "Password not provided" }
-$securePassword = ConvertTo-SecureString $passwordPlain -AsPlainText -Force
+$command = $null
+try {
+    $command = [string]$request.Command
+} catch {
+    Fail "Command not provided"
+}
 
-if ($null -ne $request.PSObject.Properties['CommandArgs']) { $commandArgs = @($request.CommandArgs) } else { $commandArgs = @() }
+$userName = $null
+try {
+    $userName = [string]$request.User
+} catch {
+    Fail "User not provided"
+}
+
+$passwordPlain = $null
+try {
+    $passwordPlain = [string]$request.Password
+} catch {
+    $passwordPlain = ""
+}
+
+$securePassword = $null
+if ($passwordPlain.Length -eq 0) {
+    $securePassword = New-Object -TypeName System.Security.SecureString
+} else {
+    $securePassword = ConvertTo-SecureString $passwordPlain -AsPlainText -Force
+}
+
+if ($null -ne $request.PSObject.Properties['CommandArgs']) {
+    $commandArgs = @($request.CommandArgs)
+} else {
+    $commandArgs = @()
+}
 
 try {
     Add-Type -AssemblyName System.DirectoryServices.AccountManagement
-    $ctx = New-Object System.DirectoryServices.AccountManagement.PrincipalContext([System.DirectoryServices.AccountManagement.ContextType]::Machine)
-    if (-not $ctx.ValidateCredentials($userName, $passwordPlain)) { Fail "Invalid username or password" }
-} catch { Fail "User validation failed: $($_.Exception.Message)" } finally { $passwordPlain = $null; [GC]::Collect() }
+
+    $ctx = New-Object `
+        System.DirectoryServices.AccountManagement.PrincipalContext(
+            [System.DirectoryServices.AccountManagement.ContextType]::Machine
+        )
+
+    if (-not $ctx.ValidateCredentials($userName, $passwordPlain)) {
+        Fail "Invalid username or password"
+    }
+} catch {
+    Fail "User validation failed: $($_.Exception.Message)"
+} finally {
+    $passwordPlain = $null
+    [GC]::Collect()
+}
 
 $baseDir    = Split-Path -Parent $MyInvocation.MyCommand.Path
 $mapPath    = Join-Path $baseDir 'Scripts.json'
 $scriptsDir = Join-Path $baseDir 'Scripts'
 
-if (-not (Test-Path $mapPath)) { Fail "Scripts.json not found" }
+if (-not (Test-Path $mapPath)) {
+    Fail "Scripts.json not found"
+}
 
 $commandMap = Get-Content $mapPath -Raw | ConvertFrom-Json
-if (-not $commandMap.PSObject.Properties[$command]) { Fail "Command '$command' not allowed" }
+if (-not $commandMap.PSObject.Properties[$command]) {
+    Fail "Command '$command' not allowed"
+}
 
 $scriptName = $commandMap.$command
 $scriptPath = Join-Path $scriptsDir $scriptName
-if (-not (Test-Path $scriptPath)) { Fail "Script '$scriptName' not found" }
+
+if (-not (Test-Path $scriptPath)) {
+    Fail "Script '$scriptName' not found"
+}
 
 try {
-    $result = & $scriptPath -User $userName -SecurePassword $securePassword -CommandArgs $commandArgs
-} catch { Fail "JEA script execution failed: $($_.Exception.Message)" }
+    $result = & $scriptPath `
+        -User $userName `
+        -SecurePassword $securePassword `
+        -CommandArgs $commandArgs
+} catch {
+    Fail "JEA script execution failed: $($_.Exception.Message)"
+}
 
 $result | ConvertTo-Json -Depth 5 -Compress
 exit 0
