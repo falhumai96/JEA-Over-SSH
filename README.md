@@ -118,7 +118,7 @@ Start-Service ssh-agent
 ### `JEARunner.ps1`
 
 ```powershell
-Set-StrictMode -Version Latest
+Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 
 function Fail ($Message, $Code = 1) {
@@ -231,7 +231,7 @@ param(
     [string[]]$CommandArgs
 )
 
-Set-StrictMode -Version Latest
+Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 
 try {
