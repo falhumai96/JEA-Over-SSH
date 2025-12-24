@@ -292,7 +292,7 @@ try {
     $psi.RedirectStandardError  = $true
 
     # ---- construct safe usbipd arguments ----
-    $psi.ArgumentList.Add($action)
+    $psi.ArgumentList.Add($action.ToLower())
 
     switch ($targetType) {
         'bus' { $psi.ArgumentList.Add('-b') }
