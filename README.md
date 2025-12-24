@@ -345,7 +345,7 @@ ssh -i .\.ssh\admin-jea-id_ed25519 admin-jea@localhost $(ConvertTo-Json @{
     Command = "USBIPD"
     User = "Faisal Al-Humaimidi"
     Password = "userpassword"
-    CommandArgs = "--help"
+    CommandArgs = "bind","bus","12-3"
 })
 ```
 
