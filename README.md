@@ -234,7 +234,23 @@ param(
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 
+# Define global mutex name
+$mutexName = "Global\SSH-JEA-USBIPD"
+$mutex = [System.Threading.Mutex]::new($false, $mutexName)
+$hasHandle = $false
+
 try {
+    # Try to acquire the mutex immediately
+    $hasHandle = $mutex.WaitOne(0)
+    if (-not $hasHandle) {
+        return [pscustomobject]@{
+            StdOut   = ""
+            StdErr   = "Another instance of this script is already running. Exiting..."
+            ExitCode = 1
+        }
+    }
+
+    # ----- Begin logic -----
     if (-not $CommandArgs -or $CommandArgs.Count -lt 3 -or $CommandArgs.Count -gt 4) {
         return [pscustomobject]@{
             StdOut   = ""
@@ -319,11 +335,18 @@ try {
         StdErr   = $stderr.TrimEnd()
         ExitCode = $exitCode
     }
+
 } catch {
     [pscustomobject]@{
         StdOut   = ""
         StdErr   = $_.Exception.Message
         ExitCode = 1
+    }
+} finally {
+    # Release the mutex if we acquired it
+    if ($hasHandle) {
+        $mutex.ReleaseMutex()
+        $mutex.Dispose()
     }
 }
 ```
