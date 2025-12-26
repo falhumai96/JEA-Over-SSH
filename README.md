@@ -85,7 +85,7 @@ Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
 
 ```text
 Match User Admin-JEA
-    ForceCommand pwsh C:/ProgramData/Admin-JEA/JEARunner.ps1
+    ForceCommand pwsh -File C:/ProgramData/Admin-JEA/JEARunner.ps1
     PubkeyAuthentication yes
     PasswordAuthentication no
     ChallengeResponseAuthentication no
