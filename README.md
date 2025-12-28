@@ -126,100 +126,130 @@ function Fail ($Message, $Code = 1) {
     exit $Code
 }
 
-$raw = [Environment]::GetEnvironmentVariable('SSH_ORIGINAL_COMMAND')
+$SSHOriginalCommandEnvVarName = "SSH_ORIGINAL_COMMAND"
+$raw = [Environment]::GetEnvironmentVariable($SSHOriginalCommandEnvVarName)
 if (-not $raw) {
-    Fail "SSH_ORIGINAL_COMMAND is not set"
+    Fail "`"$SSHOriginalCommandEnvVarName`" is not set"
 }
 
 try {
     $request = $raw | ConvertFrom-Json -ErrorAction Stop
-} catch {
-    Fail "SSH_ORIGINAL_COMMAND is not valid JSON"
+}
+catch {
+    Fail "`"$SSHOriginalCommandEnvVarName`" is not valid JSON"
 }
 
 $command = $null
 try {
     $command = [string]$request.Command
-} catch {
+}
+catch {
     Fail "Command not provided"
 }
 
 $userName = $null
 try {
     $userName = [string]$request.User
-} catch {
+}
+catch {
     Fail "User not provided"
 }
 
 $passwordPlain = $null
 try {
     $passwordPlain = [string]$request.Password
-} catch {
+}
+catch {
     $passwordPlain = ""
 }
 
-$securePassword = $null
-if ($passwordPlain.Length -eq 0) {
-    $securePassword = New-Object -TypeName System.Security.SecureString
-} else {
-    $securePassword = ConvertTo-SecureString $passwordPlain -AsPlainText -Force
-}
-
-if ($null -ne $request.PSObject.Properties['CommandArgs']) {
-    $commandArgs = @($request.CommandArgs)
-} else {
-    $commandArgs = @()
-}
+# Define global mutex name
+$mutexName = "Global\JEA-OVER-SSH"
+$mutex = [System.Threading.Mutex]::new($false, $mutexName)
+$hasHandle = $false
 
 try {
-    Add-Type -AssemblyName System.DirectoryServices.AccountManagement
+    # Try to acquire the mutex immediately
+    $hasHandle = $mutex.WaitOne(0)
+    if (-not $hasHandle) {
+        Fail "`"$mutexName`" Mutex is locked"
+    }
 
-    $ctx = New-Object `
-        System.DirectoryServices.AccountManagement.PrincipalContext(
+    $securePassword = $null
+    if ($passwordPlain.Length -eq 0) {
+        $securePassword = New-Object -TypeName System.Security.SecureString
+    }
+    else {
+        $securePassword = ConvertTo-SecureString $passwordPlain -AsPlainText -Force
+    }
+
+    if ($null -ne $request.PSObject.Properties['CommandArgs']) {
+        $commandArgs = @($request.CommandArgs)
+    }
+    else {
+        $commandArgs = @()
+    }
+
+    try {
+        Add-Type -AssemblyName System.DirectoryServices.AccountManagement
+
+        $ctx = New-Object `
+            System.DirectoryServices.AccountManagement.PrincipalContext(
             [System.DirectoryServices.AccountManagement.ContextType]::Machine
         )
 
-    if (-not $ctx.ValidateCredentials($userName, $passwordPlain)) {
-        Fail "Invalid username or password"
+        if (-not $ctx.ValidateCredentials($userName, $passwordPlain)) {
+            Fail "Invalid username or password"
+        }
     }
-} catch {
-    Fail "User validation failed: $($_.Exception.Message)"
-} finally {
-    $passwordPlain = $null
-    [GC]::Collect()
+    catch {
+        Fail "User validation failed: $($_.Exception.Message)"
+    }
+    finally {
+        $passwordPlain = $null
+        [GC]::Collect()
+    }
+
+    $baseDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+    $mapPath = Join-Path $baseDir 'Scripts.json'
+    $scriptsDir = Join-Path $baseDir 'Scripts'
+
+    if (-not (Test-Path $mapPath)) {
+        Fail "Scripts.json not found"
+    }
+
+    $commandMap = Get-Content $mapPath -Raw | ConvertFrom-Json
+    if (-not $commandMap.PSObject.Properties[$command]) {
+        Fail "Command '$command' not allowed"
+    }
+
+    $scriptName = $commandMap.$command
+    $scriptPath = Join-Path $scriptsDir $scriptName
+
+    if (-not (Test-Path $scriptPath)) {
+        Fail "Script '$scriptName' not found"
+    }
+
+    try {
+        $result = & $scriptPath `
+            -User $userName `
+            -SecurePassword $securePassword `
+            -CommandArgs $commandArgs
+    }
+    catch {
+        Fail "JEA script execution failed: $($_.Exception.Message)"
+    }
+
+    $result | ConvertTo-Json -Depth 5 -Compress
+    exit 0
 }
-
-$baseDir    = Split-Path -Parent $MyInvocation.MyCommand.Path
-$mapPath    = Join-Path $baseDir 'Scripts.json'
-$scriptsDir = Join-Path $baseDir 'Scripts'
-
-if (-not (Test-Path $mapPath)) {
-    Fail "Scripts.json not found"
+finally {
+    # Release the mutex if we acquired it
+    if ($hasHandle) {
+        $mutex.ReleaseMutex()
+        $mutex.Dispose()
+    }
 }
-
-$commandMap = Get-Content $mapPath -Raw | ConvertFrom-Json
-if (-not $commandMap.PSObject.Properties[$command]) {
-    Fail "Command '$command' not allowed"
-}
-
-$scriptName = $commandMap.$command
-$scriptPath = Join-Path $scriptsDir $scriptName
-
-if (-not (Test-Path $scriptPath)) {
-    Fail "Script '$scriptName' not found"
-}
-
-try {
-    $result = & $scriptPath `
-        -User $userName `
-        -SecurePassword $securePassword `
-        -CommandArgs $commandArgs
-} catch {
-    Fail "JEA script execution failed: $($_.Exception.Message)"
-}
-
-$result | ConvertTo-Json -Depth 5 -Compress
-exit 0
 ```
 
 ### Example USBIPD Script (`USBIPD.ps1`)
@@ -234,23 +264,7 @@ param(
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 
-# Define global mutex name
-$mutexName = "Global\SSH-JEA-USBIPD"
-$mutex = [System.Threading.Mutex]::new($false, $mutexName)
-$hasHandle = $false
-
 try {
-    # Try to acquire the mutex immediately
-    $hasHandle = $mutex.WaitOne(0)
-    if (-not $hasHandle) {
-        return [pscustomobject]@{
-            StdOut   = ""
-            StdErr   = "Another instance of this script is already running. Exiting..."
-            ExitCode = 1
-        }
-    }
-
-    # ----- Begin logic -----
     if (-not $CommandArgs -or $CommandArgs.Count -lt 3 -or $CommandArgs.Count -gt 4) {
         return [pscustomobject]@{
             StdOut   = ""
@@ -259,10 +273,10 @@ try {
         }
     }
 
-    $action     = $CommandArgs[0]
+    $action = $CommandArgs[0]
     $targetType = $CommandArgs[1]
-    $value      = $CommandArgs[2]
-    $forceFlag  = if ($CommandArgs.Count -eq 4) { $CommandArgs[3] } else { $null }
+    $value = $CommandArgs[2]
+    $forceFlag = if ($CommandArgs.Count -eq 4) { $CommandArgs[3] } else { $null }
 
     if ($action -notin @('bind', 'unbind')) {
         return [pscustomobject]@{
@@ -301,18 +315,18 @@ try {
     $exePath = $exe.Source
 
     $psi = [System.Diagnostics.ProcessStartInfo]::new()
-    $psi.FileName               = $exePath
-    $psi.UseShellExecute        = $false
-    $psi.CreateNoWindow         = $true
+    $psi.FileName = $exePath
+    $psi.UseShellExecute = $false
+    $psi.CreateNoWindow = $true
     $psi.RedirectStandardOutput = $true
-    $psi.RedirectStandardError  = $true
+    $psi.RedirectStandardError = $true
 
     # ---- construct safe usbipd arguments ----
     $psi.ArgumentList.Add($action.ToLower())
 
     switch ($targetType) {
         'bus' { $psi.ArgumentList.Add('-b') }
-        'hw'  { $psi.ArgumentList.Add('-i') }
+        'hw' { $psi.ArgumentList.Add('-i') }
     }
 
     $psi.ArgumentList.Add($value)
@@ -336,17 +350,12 @@ try {
         ExitCode = $exitCode
     }
 
-} catch {
+}
+catch {
     [pscustomobject]@{
         StdOut   = ""
         StdErr   = $_.Exception.Message
         ExitCode = 1
-    }
-} finally {
-    # Release the mutex if we acquired it
-    if ($hasHandle) {
-        $mutex.ReleaseMutex()
-        $mutex.Dispose()
     }
 }
 ```
